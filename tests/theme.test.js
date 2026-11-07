@@ -160,3 +160,15 @@ test('profile: logo must really be the image type it claims', () => {
   const big = 'data:image/png;base64,' + Buffer.alloc(300 * 1024, 1).toString('base64');
   assert.match(P.checkLogoDataUrl(big), /too large/);
 });
+
+test('muted brand colours keep their hue in charts instead of falling back to the default', () => {
+  for (const hex of ['#0F766E', '#7C2D12', '#1E3A8A', '#4D7C0F', '#9D174D']) {
+    const t = T.buildTheme({ primary: hex });
+    for (const mode of ['light', 'dark']) {
+      const first = t[mode].vars['--chart-1'];
+      const dh = Math.abs(u.hexToLch(first).h - u.hexToLch(hex).h);
+      assert.ok(Math.min(dh, 360 - dh) < 12, `${hex} ${mode}: chart series 1 ${first} must keep the brand hue`);
+      assert.equal(t.checks[mode].chartBrandSlotReplaced, false, `${hex} ${mode} should not be replaced`);
+    }
+  }
+});

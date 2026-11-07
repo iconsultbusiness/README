@@ -1,42 +1,52 @@
 # dashboards.business
 
-Brand kit and product prototype for **dashboards.business**, an all-in-one business
-intelligence app for owners and operators. Structure and rhythm are modelled on the
-All Gravy frontline-team platform (sticky header, single coral call to action, light
-marketing sections, deep ink footer with Platform / Resources columns), with an
-original identity built for the dashboards.business domain.
+White-label business dashboards for owners and operators. A customer signs up, we read their brand from their website (they confirm it), and the daily tool their team opens carries their name, logo, colours and font, with their locations, currency and targets.
 
-## What is here
+Status: **early preview**. The branding and profile flow is real and tested. The numbers are sample data.
 
-| Path | Contents |
+## What is real and what is sample
+
+| Area | State |
 |---|---|
-| `brand/BRAND-GUIDELINES.md` | Positioning, voice, logo rules, colour, type, spacing, product principles, site IA |
-| `brand/logo/` | App mark, favicon, stacked wordmarks (light/dark), horizontal lockup, all SVG |
-| `brand/tokens/tokens.css` | CSS custom properties for light and dark mode |
-| `brand/tokens/tokens.json` | Same tokens in W3C design-token format |
-| `site/index.html` | Marketing landing page |
-| `site/app.html` | Dashboard app shell ("Today" screen) with live-sizing SVG charts |
-| `site/styles.css` | Shared stylesheet, imports the tokens |
+| Sign-up, profile, tenant storage, edit key | Real (single-instance JSON file, no accounts yet) |
+| Brand discovery from a website | Real, with SSRF protection |
+| Theme engine (contrast, light/dark, colour-blind-safe charts) | Real, 48 automated tests |
+| Screens: Today, Dashboards, Alerts, AI analyst, Data sources, Goals, Brand & settings | Real UI |
+| Every number in the app | **Generated sample data** shaped by the profile |
+| Data connectors | **Not built** |
+| AI analyst | **Rule-based over sample data**, not a language model |
+| Alert delivery (push, email) | **Not built**; rules are evaluated only |
+| Login, accounts, billing, custom domains | **Not built** |
+| Terms and privacy pages | **Not written** |
 
-## Preview locally
+Details, security model and the launch checklist are in `WHITE-LABEL.md`. Deployment notes are in `DEPLOY.md`.
+
+## Run it
 
 ```bash
-cd site && python3 -m http.server 8080
-# open http://localhost:8080/index.html and http://localhost:8080/app.html
+npm start            # http://127.0.0.1:8080  (landing, sign-up, app)
+npm test             # 48 unit and API tests, no dependencies
+npm run e2e          # full browser flow; needs Playwright + Chromium
 ```
 
-No build step. Fonts (Outfit, Inter, JetBrains Mono) load from Google Fonts.
+Try `http://127.0.0.1:8080/app.html?demo` for the default-brand demo workspace, or go through `signup.html`.
 
-## Identity at a glance
+## Layout
 
-- **Wordmark:** `dash.` small in violet over `boards` large in ink. The coral period is the only accent.
-- **Mark:** violet rounded tile, three rising white bars, one coral dot top-left.
-- **Colours:** Violet `#6B4EFF` (brand), Coral `#FF5C7A` (CTA only), Lime `#C8F55A` (live accent), Ink `#0F1222`, Cloud `#F6F7FB`.
-- **Type:** Outfit for display, Inter for UI, JetBrains Mono for figures.
-- **Voice:** plain, confident, specific. Sentence case everywhere.
+```
+brand/                brand kit: guidelines, logos (outlined SVG), design tokens, outline tool
+server/               zero-dependency Node server: API, guarded fetcher, brand extraction, storage
+site/
+  index.html          marketing page
+  signup.html         create a workspace (profile + brand + live preview)
+  app.html, dashboards.html, alerts.html, analyst.html, sources.html, goals.html, settings.html
+  app.css             app styles, token-driven (one stylesheet for every tenant)
+  js/theme.js         tenant theme engine, shared by browser, server and tests
+  js/profile.js       profile schema and sanitiser, shared likewise
+  js/data.js          sample-data engine (the layer a real connector replaces)
+tests/                unit, API, security and site-guard tests, plus the browser flow
+```
 
-## Next steps
+## Brand kit
 
-1. Outline the wordmark text to paths for print and app-store assets.
-2. Build the remaining app screens: Dashboards, Alerts, AI analyst, Data sources, Goals.
-3. Wire the landing page to a real sign-up and point `dashboards.business` at the deploy.
+See `brand/BRAND-GUIDELINES.md`. The wordmark and lockup SVGs are outlined vectors (no font needed). Regenerate with `npm run outline-logo`.

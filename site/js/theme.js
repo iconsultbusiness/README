@@ -166,47 +166,59 @@
     dark: ['#8A74F5', '#E8607E', '#1FA39C', '#C4872A'],
   };
   const BAND = { light: [0.43, 0.77], dark: [0.48, 0.67] };
-  const POOL_L = { light: [0.5, 0.58, 0.66], dark: [0.52, 0.58, 0.64] };
+  const POOL_L = { light: [0.46, 0.54, 0.62, 0.7], dark: [0.5, 0.56, 0.62, 0.66] };
+  const POOL_C = [0.12, 0.17];
   const REF_SURFACE = { light: '#FFFFFF', dark: '#262B45' }; // charts sit on cards; dark ref is lighter than any real card
   const hueDist = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+  const dist3 = (x, y) => 100 * Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
+  const simLab = (hex) => ({ n: hexToLab(hex), p: hexToLab(simulate(hex, 'protan')), d: hexToLab(simulate(hex, 'deutan')), t: hexToLab(simulate(hex, 'tritan')) });
+  const cvdLab = (a, b) => Math.min(dist3(a.p, b.p), dist3(a.d, b.d), dist3(a.t, b.t));
 
   /* The candidate pool and its pairwise distances do not depend on the brand, so build them once per mode. */
   const poolCache = {};
   function getPool(mode) {
     if (poolCache[mode]) return poolCache[mode];
     const [lo, hi] = BAND[mode];
-    const seen = new Set();
-    const colors = [];
+    const seen = new Set(), colors = [];
     const push = (hex) => {
       const { L, C } = hexToLch(hex);
       if (L < lo || L > hi || C < 0.1 || contrast(hex, REF_SURFACE[mode]) < 3.1 || seen.has(hex)) return;
       seen.add(hex); colors.push(hex);
     };
     DEFAULT_CHART[mode].slice(1).forEach(push);
-    for (let h = 0; h < 360; h += 15) for (const L of POOL_L[mode]) push(lchToHex(L, 0.15, h));
-    const n = colors.length;
+    for (let h = 0; h < 360; h += 10) for (const L of POOL_L[mode]) for (const C of POOL_C) push(lchToHex(L, C, h));
+    const n = colors.length, labs = colors.map(simLab);
     const normal = new Float32Array(n * n), cvd = new Float32Array(n * n);
     for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
-      normal[i * n + j] = normal[j * n + i] = deltaE(colors[i], colors[j]);
-      cvd[i * n + j] = cvd[j * n + i] = cvdDeltaE(colors[i], colors[j]);
+      normal[i * n + j] = normal[j * n + i] = dist3(labs[i].n, labs[j].n);
+      cvd[i * n + j] = cvd[j * n + i] = cvdLab(labs[i], labs[j]);
     }
-    return (poolCache[mode] = { colors, hues: colors.map((c) => hexToLch(c).h), normal, cvd, n });
+    return (poolCache[mode] = { colors, labs, hues: colors.map((c) => hexToLch(c).h), normal, cvd, n });
   }
 
   function chartPalette(mode, brandUi, worstSurface) {
     const [bandLo, bandHi] = BAND[mode];
     const flags = { secondaryEncoding: false, brandSlotReplaced: false };
-    let first = (() => {
+    // Keep the brand hue. Muted brand colours get their saturation lifted just enough to read as a series colour.
+    // If the floor is unreachable at the original lightness, step lighter (still inside the band and the contrast limit).
+    // Only a colour that is essentially grey, or cannot get there at all, is swapped for the default.
+    const lift = () => {
       const { L, C, h } = hexToLch(brandUi);
-      return ensureContrast(lchToHex(clamp(L, bandLo + 0.004, bandHi - 0.004), C, h), worstSurface, 3).hex;
-    })();
-    if (hexToLch(first).C < 0.1) { first = DEFAULT_CHART[mode][0]; flags.brandSlotReplaced = true; }
+      if (C < 0.03) return null;
+      for (let l = clamp(L, bandLo + 0.004, bandHi - 0.004); l <= bandHi - 0.004; l += 0.01) {
+        const cand = lchToHex(l, Math.max(C, 0.125), h);
+        if (hexToLch(cand).C >= 0.1 && contrast(cand, worstSurface) >= 3) return cand;
+      }
+      return null;
+    };
+    let first = lift();
+    if (!first) { first = DEFAULT_CHART[mode][0]; flags.brandSlotReplaced = true; }
 
     const pool = getPool(mode), n = pool.n;
-    const ok = [], d1n = new Float32Array(n), d1c = new Float32Array(n);
+    const ok = [], d1n = new Float32Array(n), d1c = new Float32Array(n), firstLab = simLab(first);
     for (let i = 0; i < n; i++) {
-      d1n[i] = deltaE(first, pool.colors[i]);
-      d1c[i] = cvdDeltaE(first, pool.colors[i]);
+      d1n[i] = dist3(firstLab.n, pool.labs[i].n);
+      d1c[i] = cvdLab(firstLab, pool.labs[i]);
       if (contrast(pool.colors[i], worstSurface) >= 3) ok.push(i);
     }
     const defHues = DEFAULT_CHART[mode].slice(1).map((c) => hexToLch(c).h);
@@ -222,6 +234,8 @@
             const k = ok[c]; if (d1n[k] < minNormal || pool.normal[i * n + k] < minNormal || pool.normal[j * n + k] < minNormal) continue;
             const minCvd = Math.min(d1c[i], d1c[j], d1c[k], pool.cvd[i * n + j], pool.cvd[i * n + k], pool.cvd[j * n + k]);
             const minNorm = Math.min(d1n[i], d1n[j], d1n[k], pool.normal[i * n + j], pool.normal[i * n + k], pool.normal[j * n + k]);
+            const base = Math.min(minCvd, 12) + (0.4 * Math.min(minNorm, 30)) / 30;
+            if (best && base <= best.score) continue; // the hue term can only lower the score, so this trio cannot win
             const trio = [i, j, k];
             let bestPerm = null, bestHue = Infinity;
             for (const perm of perms) {
@@ -229,7 +243,7 @@
               if (hd < bestHue) { bestHue = hd; bestPerm = perm; }
             }
             // Separation first (capped, so more is not endlessly better), then stay close to the default hues.
-            const score = Math.min(minCvd, 12) + 0.4 * Math.min(minNorm, 30) / 30 - 0.004 * bestHue;
+            const score = base - 0.004 * bestHue;
             if (!best || score > best.score) best = { score, order: bestPerm.map((p) => trio[p]) };
           }
         }
@@ -282,14 +296,15 @@
   };
 
   function surfaces(mode, h, C) {
-    const c = 0.006 + 0.01 * clamp(C / 0.15, 0, 1);
+    // yellow-green hues turn muddy olive when used to tint dark surfaces, so tint them less
+    const c = (0.006 + 0.01 * clamp(C / 0.15, 0, 1)) * (h > 70 && h < 150 ? 0.5 : 1);
     if (mode === 'light') {
       return {
-        bg: lchToHex(0.972, c * 0.8, h),
+        bg: lchToHex(0.972, c * 0.35, h),
         surface: '#FFFFFF',
-        surface2: lchToHex(0.985, c * 0.6, h),
-        border: lchToHex(0.915, c, h),
-        borderStrong: lchToHex(0.85, c, h),
+        surface2: lchToHex(0.982, c * 0.3, h),
+        border: lchToHex(0.915, c * 0.55, h),
+        borderStrong: lchToHex(0.85, c * 0.6, h),
         tint: c,
       };
     }
