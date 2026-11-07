@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /$
+Allow: /index.html
+Allow: /signup.html
+Allow: /login.html
+Disallow: /app.html
+Disallow: /dashboards.html
+Disallow: /alerts.html
+Disallow: /analyst.html
+Disallow: /sources.html
+Disallow: /goals.html
+Disallow: /settings.html
+Disallow: /api/

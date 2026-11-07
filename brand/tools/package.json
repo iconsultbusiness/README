@@ -1,0 +1,10 @@
+{
+  "name": "dashboards-brand-tools",
+  "private": true,
+  "description": "Build-time tools for the brand kit. Not shipped with the site.",
+  "scripts": { "outline": "node outline-wordmark.cjs" },
+  "devDependencies": {
+    "@fontsource/outfit": "5.2.8",
+    "opentype.js": "1.3.4"
+  }
+}
