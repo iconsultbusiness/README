@@ -1,0 +1,13 @@
+{
+  "name": "dashboards-business",
+  "version": "0.2.0",
+  "private": true,
+  "description": "dashboards.business: white-label business dashboards. Marketing site, signup, tenant-branded app, brand extraction API.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server/server.js",
+    "test": "node --test tests/*.test.js",
+    "outline-logo": "cd brand/tools && npm install && npm run outline"
+  },
+  "license": "UNLICENSED"
+}
