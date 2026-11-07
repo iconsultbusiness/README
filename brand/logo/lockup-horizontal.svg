@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 64" width="420" height="64" role="img" aria-label="dashboards.business">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@800&amp;display=swap');
+    .w { font-family: 'Outfit', 'Inter', system-ui, sans-serif; font-weight: 800; letter-spacing: -0.04em; }
+  </style>
+  <rect width="64" height="64" rx="16" fill="#6B4EFF"/>
+  <rect x="14" y="36" width="8" height="14" rx="4" fill="#FFFFFF"/>
+  <rect x="28" y="26" width="8" height="24" rx="4" fill="#FFFFFF"/>
+  <rect x="42" y="14" width="8" height="36" rx="4" fill="#FFFFFF"/>
+  <circle cx="18" cy="20" r="5" fill="#FF5C7A"/>
+  <text class="w" x="82" y="47" font-size="40" fill="#12152A">dashboards<tspan fill="#6B4EFF">.business</tspan></text>
+</svg>

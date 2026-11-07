@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 96" width="280" height="96" role="img" aria-label="dash.boards — dashboards.business">
+  <!-- Stacked wordmark. Display face: Outfit 800. Outline the text before print use. -->
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@800&amp;display=swap');
+    .w { font-family: 'Outfit', 'Inter', system-ui, sans-serif; font-weight: 800; letter-spacing: -0.04em; }
+  </style>
+  <text class="w" x="4" y="34" font-size="30" fill="#6B4EFF">dash<tspan fill="#FF5C7A">.</tspan></text>
+  <text class="w" x="2" y="88" font-size="64" fill="#FFFFFF">boards</text>
+</svg>
