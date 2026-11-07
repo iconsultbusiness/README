@@ -33,6 +33,8 @@ function openDb(file) {
   const db = new DatabaseSync(file);
   if (file !== ':memory:') { try { fs.chmodSync(file, 0o600); } catch (e) { /* not supported on this filesystem */ } }
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA synchronous = NORMAL;');
+  const check = Object.values(db.prepare('PRAGMA quick_check').get())[0];
+  if (check !== 'ok') throw new Error('The database failed its integrity check (' + check + '). Restore the newest file from the backups folder.');
   for (const sql of SCHEMA) db.exec(sql);
   db.prepare(`INSERT OR IGNORE INTO meta (k, v) VALUES ('schema', '1')`).run();
   return db;

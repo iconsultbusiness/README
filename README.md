@@ -33,7 +33,7 @@ npm run e2e          # 45-step browser run (needs Playwright with Chromium)
 
 Open `http://127.0.0.1:8080/signup.html` to create an account, or `/app.html?demo` for a demo workspace that needs no account.
 
-Settings and deployment are in `DEPLOY.md`. Design, security model and the launch checklist are in `WHITE-LABEL.md`.
+Deployment (recommended host, step-by-step, GoDaddy DNS, security and reliability notes) is in `DEPLOY.md`. Design, security model and the launch checklist are in `WHITE-LABEL.md`.
 
 ## Layout
 

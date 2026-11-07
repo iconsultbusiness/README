@@ -1,0 +1,27 @@
+# Render Blueprint: one web service with a persistent disk for the database.
+# In Render: New, then Blueprint, pick this repository and branch, review, Apply.
+# A disk needs a paid instance, and a service with a disk runs as exactly one instance.
+services:
+  - type: web
+    name: dashboards-business
+    runtime: node
+    plan: starter            # check the current plan name and price on render.com/pricing
+    buildCommand: echo "nothing to build"
+    startCommand: node server/server.js
+    healthCheckPath: /api/health
+    autoDeploy: false        # deploy on purpose, from the dashboard, after you have looked at the change
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: HOST
+        value: 0.0.0.0
+      - key: DB_FILE
+        value: /var/data/app.db
+      - key: COOKIE_SECURE
+        value: "1"
+      - key: TRUST_PROXY
+        value: "1"

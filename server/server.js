@@ -21,6 +21,7 @@ const { extractBrand } = require('./lib/brand');
 const { sanitizeProfile } = require('../site/js/profile.js');
 const Csv = require('../site/js/csv.js');
 const Theme = require('../site/js/theme.js');
+const { startBackups } = require('./lib/backup');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -64,7 +65,7 @@ function createServer(options) {
 
   function send(res, status, body, headers) {
     const isObj = body !== null && typeof body === 'object' && !Buffer.isBuffer(body);
-    res.writeHead(status, { ...SECURITY, 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers });
+    res.writeHead(status, { ...SECURITY, ...(res.hsts ? { 'strict-transport-security': 'max-age=31536000' } : {}), 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers });
     res.end(isObj ? JSON.stringify(body) : body);
   }
   function readJson(req, max) {
@@ -346,12 +347,21 @@ function createServer(options) {
     try { url = new URL(req.url, 'http://localhost'); } catch (e) { return send(res, 400, { error: { code: 'bad_request', message: 'Bad request.' } }); }
     const p = url.pathname;
     try {
+      if (p === '/api/health') {
+        try { db.prepare('SELECT 1').get(); return send(res, 200, { ok: true }); } catch (e) { return send(res, 503, { ok: false }); }
+      }
+      if (secure(req)) res.hsts = true;
+      // Behind a proxy that terminates TLS: send plain-HTTP visitors to HTTPS (never for the health check).
+      if (o.httpsOnlyCookies && o.trustProxy && req.headers['x-forwarded-proto'] === 'http') {
+        const host = String(req.headers.host || '');
+        if (!/^[a-z0-9.-]+(:\d{1,5})?$/i.test(host)) throw HttpError(400, 'bad_host', 'Bad host.');
+        return send(res, 301, '', { location: 'https://' + host + req.url, 'content-type': 'text/plain' });
+      }
       if (p.startsWith('/api/')) {
         if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers.origin) { // CSRF: a browser always sends Origin on cross-site writes
           let host = ''; try { host = new URL(req.headers.origin).host; } catch (e) { /* malformed */ }
           if (host !== req.headers.host) throw HttpError(403, 'bad_origin', 'Cross-site requests are not allowed.');
         }
-        if (p === '/api/health') return send(res, 200, { ok: true });
         if (p.startsWith('/api/auth/') || p === '/api/account') return await auth(req, res, p);
         if (p === '/api/tenant') return await workspace(req, res, p);
         if (p.startsWith('/api/data')) return await data(req, res, p, url, /\bgzip\b/.test(req.headers['accept-encoding'] || ''));
@@ -370,6 +380,8 @@ function createServer(options) {
       return send(res, 500, { error: { code: 'server_error', message: 'Something went wrong on our side.' } });
     }
   });
+  // Slow-client protection: headers must arrive quickly and no request may take longer than a minute.
+  server.headersTimeout = 15000; server.requestTimeout = 60000; server.keepAliveTimeout = 5000;
   server.on('close', () => { try { db.close(); } catch (e) { /* already closed */ } });
   server.db = db;
   return server;
@@ -377,7 +389,19 @@ function createServer(options) {
 
 if (require.main === module) {
   const port = Number(process.env.PORT) || 8080, host = process.env.HOST || '127.0.0.1';
-  createServer({ dbFile: process.env.DB_FILE || process.env.DATA_FILE || undefined, trustProxy: process.env.TRUST_PROXY === '1', httpsOnlyCookies: process.env.COOKIE_SECURE === '1' })
-    .listen(port, host, () => console.log(`dashboards.business listening on http://${host}:${port}`));
+  const dbFile = process.env.DB_FILE || process.env.DATA_FILE || path.join(__dirname, '..', 'data', 'app.db');
+  const server = createServer({ dbFile, trustProxy: process.env.TRUST_PROXY === '1', httpsOnlyCookies: process.env.COOKIE_SECURE === '1' });
+  server.listen(port, host, () => console.log(`dashboards.business listening on http://${host}:${port}`));
+  if (process.env.BACKUPS !== 'off') startBackups(server.db, process.env.BACKUP_DIR || path.join(path.dirname(dbFile), 'backups'), { everyHours: Number(process.env.BACKUP_EVERY_HOURS) || 6, keep: Number(process.env.BACKUP_KEEP) || 28 });
+  // Hosts stop the old copy on every deploy: finish in-flight requests, flush the database, then exit.
+  let stopping = false;
+  const stop = (sig) => {
+    if (stopping) return; stopping = true;
+    console.log(sig + ' received, shutting down');
+    server.close(() => { console.log('closed cleanly'); process.exit(0); });
+    server.closeIdleConnections && server.closeIdleConnections();
+    setTimeout(() => { server.closeAllConnections && server.closeAllConnections(); process.exit(0); }, 8000).unref();
+  };
+  process.on('SIGTERM', () => stop('SIGTERM')); process.on('SIGINT', () => stop('SIGINT'));
 }
 module.exports = { createServer };
