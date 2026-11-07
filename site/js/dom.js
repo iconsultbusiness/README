@@ -26,6 +26,8 @@
   }
   DB.h = function (tag, attrs) { const el = document.createElement(tag); apply(el, attrs); append(el, Array.prototype.slice.call(arguments, 2)); return el; };
   DB.s = function (tag, attrs) { const el = document.createElementNS(SVG_NS, tag); apply(el, attrs); append(el, Array.prototype.slice.call(arguments, 2)); return el; };
+  /** Append children, skipping null, undefined and false (the native append() would print the word "null"). */
+  DB.add = function (el) { append(el, Array.prototype.slice.call(arguments, 1)); return el; };
   DB.clear = function (el) { while (el.firstChild) el.removeChild(el.firstChild); return el; };
 
   /** Inline icons (stroke style). Fixed set, so no external requests. */

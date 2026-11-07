@@ -10,15 +10,16 @@
     render(c, el) {
       const { model: m, f, profile: p, tenant } = c, D = DB.data;
       const kCustom = 'db.rules.' + tenant.id, kState = 'db.rulestate.' + tenant.id;
-      const rules = () => { const st = read(kState, {}); return D.defaultRules(p).concat(read(kCustom, [])).map((r) => ({ ...r, enabled: st[r.id] !== undefined ? st[r.id] : r.enabled })); };
+      const usable = (r) => !(r.metric === 'efficiency' && m.hasEff === false) && !(['avg', 'volume'].includes(r.metric) && m.hasVolume === false);
+      const rules = () => { const st = read(kState, {}); return D.defaultRules(p).concat(read(kCustom, [])).filter(usable).map((r) => ({ ...r, enabled: st[r.id] !== undefined ? st[r.id] : r.enabled })); };
       const sev = { critical: 'var(--critical)', warn: 'var(--warn)', ok: 'var(--ok)', info: 'var(--text-3)' };
 
-      const feed = h('div', { class: 'panel' }, h('header', null, h('h2', { text: 'Happening now' }), h('span', { class: 'meta', text: `${m.alerts.length} items` })),
+      const feed = h('div', { class: 'panel' }, h('header', null, h('h2', { text: m.real ? 'Latest day' : 'Happening now' }), h('span', { class: 'meta', text: `${m.alerts.length} items` })),
         m.alerts.length ? h('ul', { class: 'alerts' }, m.alerts.map((a) => h('li', null, h('span', { class: 'dot', style: { background: sev[a.severity] }, 'aria-hidden': 'true' }), h('div', null, h('b', { text: a.title }), a.body), h('time', { text: a.ago })))) : h('div', { class: 'empty', text: 'Nothing needs your attention.' }));
 
       const list = h('ul', { class: 'rows' });
       const rulesPanel = h('div', { class: 'panel' }, h('header', null, h('h2', { text: 'Rules' }), h('button', { class: 'btn btn-primary btn-sm', onclick: () => dlg.showModal() }, icon('plus', 14), 'Add rule')),
-        h('p', { class: 'muted', style: { fontSize: '13px', marginBottom: '8px' }, text: 'Each rule shows how often it would have fired in the last 28 days, so you can tune it before it bothers anyone. Notifications are not delivered in this preview.' }), list);
+        h('p', { class: 'muted', style: { fontSize: '13px', marginBottom: '8px' }, text: 'Each rule shows how often it would have fired in the last 28 days, so you can tune it before it bothers anyone. Notifications are not sent yet: rules are evaluated when you open the app.' }), list);
 
       const paint = () => {
         DB.clear(list);
@@ -35,7 +36,7 @@
 
       /* add-rule dialog */
       const sel = (id, opts) => h('select', { id }, opts.map(([v, l]) => h('option', { value: v, text: l })));
-      const metric = sel('r-metric', [['revenue', 'Daily revenue (per location)'], ['volume', m.ind.volume + ' (per location)'], ['avg', m.ind.avg], ['efficiency', m.ind.efficiency]]);
+      const metric = sel('r-metric', [['revenue', 'Daily revenue (per location)']].concat(m.hasVolume === false ? [] : [['volume', m.ind.volume + ' (per location)'], ['avg', m.ind.avg]], m.hasEff === false ? [] : [['efficiency', m.ind.efficiency]]));
       const op = sel('r-op', [['<', 'falls below'], ['>', 'goes above']]);
       const val = h('input', { id: 'r-val', type: 'number', step: 'any', inputmode: 'decimal', placeholder: 'e.g. 2500' });
       const chan = sel('r-chan', [['push', 'Push notification'], ['email', 'Email']]);
@@ -56,7 +57,7 @@
         h('div', { class: 'actions' }, h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => dlg.close(), text: 'Cancel' }), h('button', { class: 'btn btn-primary', type: 'submit', text: 'Add rule' })));
       const dlg = h('dialog', { 'aria-label': 'New alert rule' }, form);
       paint();
-      DB.clear(el); el.append(h('div', { class: 'panels two' }, rulesPanel, feed), dlg);
+      DB.clear(el); DB.add(el, h('div', { class: 'panels two' }, rulesPanel, feed), dlg);
     },
   };
 })();

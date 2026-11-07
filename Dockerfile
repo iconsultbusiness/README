@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package.json ./
 COPY server ./server
 COPY site ./site
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=8080 DATA_FILE=/data/tenants.json
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=8080 DB_FILE=/data/app.db
 RUN mkdir -p /data && chown node:node /data
 VOLUME /data
 USER node

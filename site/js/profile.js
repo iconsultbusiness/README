@@ -39,7 +39,7 @@
       company: { name: '', website: '', industry: 'hospitality', currency: 'USD', locale: 'en-US', timezone: 'UTC', weekStart: 'mon' },
       locations: ['Main'],
       targets: { efficiency: INDUSTRIES.hospitality.efficiencyDefault, dailyRevenue: INDUSTRIES.hospitality.dailyRevenueDefault },
-      brand: { primary: Theme.DEFAULT_BRAND.primary, accent: Theme.DEFAULT_BRAND.accent, font: 'inter', mode: 'auto', appName: '', logo: null, logoLum: null, showPoweredBy: true },
+      brand: { primary: Theme.DEFAULT_BRAND.primary, accent: Theme.DEFAULT_BRAND.accent, font: 'inter', mode: 'auto', appName: '', logo: null, logoLum: null, icon192: null, icon512: null, showPoweredBy: true },
     };
   }
 
@@ -74,6 +74,17 @@
     const isWebp = b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50;
     const ok = (m[1] === 'png' && isPng) || (m[1] === 'jpeg' && isJpg) || (m[1] === 'webp' && isWebp);
     return ok ? null : 'Logo file does not match its type.';
+  }
+
+  /** App icons (192 and 512 px PNG) are generated in the browser from the logo; same magic-byte check as the logo. */
+  function checkIconDataUrl(url, size) {
+    const m = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(url);
+    if (!m) return 'Icon must be a PNG.';
+    if (Math.floor((m[1].length * 3) / 4) > 120 * 1024) return 'Icon is too large.';
+    const b = typeof Buffer !== 'undefined' ? Buffer.from(m[1], 'base64') : Uint8Array.from(atob(m[1]), (c) => c.charCodeAt(0));
+    if (!(b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47)) return 'Icon file does not match its type.';
+    const w = ((b[16] << 24) | (b[17] << 16) | (b[18] << 8) | b[19]) >>> 0, h = ((b[20] << 24) | (b[21] << 16) | (b[22] << 8) | b[23]) >>> 0;
+    return w === size && h === size ? null : `Icon must be ${size} by ${size} pixels.`;
   }
 
   /**
@@ -139,6 +150,12 @@
       }
     }
 
+    let icon192 = null, icon512 = null;
+    if (b.icon192 && b.icon512) {
+      const e1 = checkIconDataUrl(b.icon192, 192), e2 = checkIconDataUrl(b.icon512, 512);
+      if (e1 || e2) err('brand.icon', e1 || e2); else { icon192 = b.icon192; icon512 = b.icon512; }
+    }
+
     if (opts.requireConsent && !(raw.consent && raw.consent.brandAuthority === true)) {
       err('consent.brandAuthority', 'Please confirm you are allowed to use this name and logo.');
     }
@@ -147,10 +164,10 @@
       company: { name, website, industry, currency, locale, timezone, weekStart },
       locations: locs,
       targets,
-      brand: { primary: primary || d.brand.primary, accent, font, mode, appName, logo, logoLum, showPoweredBy: b.showPoweredBy !== false },
+      brand: { primary: primary || d.brand.primary, accent, font, mode, appName, logo, logoLum, icon192, icon512, showPoweredBy: b.showPoweredBy !== false },
     };
     return { ok: errors.length === 0, profile, errors };
   }
 
-  return { INDUSTRIES, CURRENCIES, MODES, LIMITS, defaultProfile, sanitizeProfile, checkLogoDataUrl, cleanText, normaliseWebsite };
+  return { INDUSTRIES, CURRENCIES, MODES, LIMITS, defaultProfile, sanitizeProfile, checkLogoDataUrl, checkIconDataUrl, cleanText, normaliseWebsite };
 });

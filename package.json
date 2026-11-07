@@ -1,10 +1,10 @@
 {
   "name": "dashboards-business",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "dashboards.business: white-label business dashboards. Marketing site, signup, tenant-branded app, brand extraction API.",
+  "description": "dashboards.business: white-label business dashboards. Accounts, CSV data import, per-customer branding, installable app.",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13"
   },
   "scripts": {
     "start": "node server/server.js",

@@ -170,3 +170,6 @@ p{margin:0 0 var(--s-4)}
 .mock-note{text-align:center;font-size:var(--fs-sm);color:var(--text-3);margin-top:14px}
 .early{max-width:640px;margin:0 auto}
 .early h3{font-size:var(--fs-2xl)}
+
+.nav-login{font-weight:600;color:var(--text-2);padding:8px 6px}.nav-login:hover{color:var(--text)}
+@media(max-width:520px){.nav-login{display:none}}

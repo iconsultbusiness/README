@@ -53,3 +53,11 @@ test('the landing page makes no claims the product cannot back up', () => {
     assert.ok(!html.includes(banned), `index.html still contains "${banned}"`);
   }
 });
+
+test('page scripts append through DB.add, never the native append (it prints the word "null")', () => {
+  for (const file of walk(path.join(SITE, 'js'))) {
+    if (file.endsWith('dom.js')) continue;
+    const src = fs.readFileSync(file, 'utf8');
+    assert.ok(!/\.append\(/.test(src), `${path.relative(SITE, file)} uses native .append()`);
+  }
+});

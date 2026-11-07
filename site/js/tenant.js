@@ -1,22 +1,18 @@
 /*
- * Loads the signed-in customer's profile and applies their branding.
+ * Loads the signed-in customer's workspace and applies their branding.
  *
- * Source of truth is the server (GET /api/tenants/:id). A cached copy in
- * localStorage lets the page paint in the right colours immediately and keeps the
- * preview working on a static host with no API ("local" workspaces).
- * There are no accounts yet: the workspace id selects the tenant and the edit key
- * from sign-up (kept in this browser) authorises changes.
+ * Source of truth is the server (session cookie, GET /api/auth/me). The last profile is cached in
+ * localStorage so the page paints in the right colours at once and the installed app opens offline;
+ * that cache is cleared on sign-out. `?demo` opens a sample workspace that needs no account or server.
  */
 (function () {
   'use strict';
   const DB = (window.DB = window.DB || {});
-  const SESSION = 'db.session';
-  const cacheKey = (id) => 'db.profile.' + id;
-  const modeKey = (id) => 'db.mode.' + id;
+  const LAST = 'db.profile.last';
   const get = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const set = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* storage blocked */ } };
-  const del = (k) => { try { localStorage.removeItem(k); } catch (e) { /* storage blocked */ } };
   const readJson = (k) => { try { return JSON.parse(get(k) || 'null'); } catch (e) { return null; } };
+  const JSON_POST = (method, body) => ({ method, headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
 
   function demoProfile() {
     const p = DBProfile.defaultProfile();
@@ -28,69 +24,84 @@
     return DBProfile.sanitizeProfile(p).profile;
   }
 
-  const tenant = (DB.tenant = {
-    id: null, token: null, profile: null, demo: false, mode: 'api', theme: null,
-    session: () => readJson(SESSION),
-    saveSession(s) { set(SESSION, JSON.stringify(s)); },
-    signOut() { del(SESSION); },
+  DB.api = async function (method, path, body) {
+    const r = await fetch(path, JSON_POST(method, body));
+    let j = null; try { j = await r.json(); } catch (e) { /* no body */ }
+    return { ok: r.ok, status: r.status, json: j, error: j && j.error };
+  };
 
-    /** Paint with the cached profile straight away, then refresh from the server. */
+  const tenant = (DB.tenant = {
+    id: null, profile: null, user: null, data: null, demo: false, offline: false, theme: null,
+
+    /** Resolves to 'ok' | 'login' | 'signup'. */
     async load() {
       const q = new URLSearchParams(location.search);
-      const sess = readJson(SESSION) || {};
-      const demo = q.has('demo');
-      const id = demo ? 'demo' : q.get('t') || sess.id || null;
-      if (!id) return null;
-      tenant.id = id; tenant.demo = demo;
-      tenant.token = q.get('t') && q.get('t') !== sess.id ? null : sess.token || null;
-      if (demo) { tenant.profile = demoProfile(); tenant.applyTheme(); return tenant; }
-      const cached = readJson(cacheKey(id));
-      if (cached) { tenant.profile = cached; tenant.applyTheme(); }
-      if (/^local-/.test(id)) { tenant.mode = 'local'; return cached ? tenant : null; }
+      if (q.has('demo')) { tenant.demo = true; tenant.id = 'demo'; tenant.profile = demoProfile(); tenant.applyTheme(); return 'ok'; }
+      const cached = readJson(LAST);
+      if (cached) { tenant.profile = cached.profile; tenant.id = cached.id; tenant.applyTheme(); }
+      let me;
       try {
-        const r = await fetch('/api/tenants/' + encodeURIComponent(id), { headers: { accept: 'application/json' } });
-        if (r.status === 404) { if (!q.get('t')) tenant.signOut(); return null; }
+        const r = await fetch('/api/auth/me', { headers: { accept: 'application/json' } });
         if (!r.ok) throw new Error('status ' + r.status);
-        const j = await r.json();
-        tenant.profile = j.profile; set(cacheKey(id), JSON.stringify(j.profile));
-        tenant.applyTheme();
+        me = await r.json();
       } catch (e) {
-        if (!cached) return null;
-        tenant.offline = true;
+        if (cached) { tenant.offline = true; tenant.user = cached.user || null; tenant.data = cached.data || null; return 'ok'; }
+        return 'login';
       }
-      return tenant;
+      if (!me.user) { tenant.clearLocal(); return 'login'; }
+      tenant.user = me.user;
+      if (!me.tenant) return 'signup';
+      tenant.id = me.tenant.id; tenant.profile = me.tenant.profile; tenant.data = me.tenant.data;
+      set(LAST, JSON.stringify({ id: tenant.id, profile: tenant.profile, user: tenant.user, data: tenant.data }));
+      tenant.applyTheme();
+      return 'ok';
     },
 
-    /** Save changes. Uses the edit key when there is a server, localStorage otherwise. */
+    /** Imported rows, newest data from the server, with the last copy kept for offline use. */
+    async loadRows() {
+      const key = 'db.rows.' + tenant.id;
+      try {
+        const r = await fetch('/api/data/rows');
+        if (!r.ok) throw new Error('status ' + r.status);
+        const j = await r.json();
+        set(key, JSON.stringify(j.rows)); return j.rows;
+      } catch (e) { const c = readJson(key); if (c) { tenant.offline = true; return c; } throw e; }
+    },
+
     async save(profile) {
       const r = DBProfile.sanitizeProfile(profile, {});
       if (!r.ok) return { ok: false, errors: r.errors };
-      if (tenant.demo || tenant.mode === 'local') {
-        if (tenant.demo) { tenant.profile = r.profile; tenant.applyTheme(); return { ok: true, local: true }; }
-        tenant.profile = r.profile; set(cacheKey(tenant.id), JSON.stringify(r.profile)); tenant.applyTheme();
-        return { ok: true, local: true };
-      }
-      if (!tenant.token) return { ok: false, errors: [{ field: '', message: 'This browser does not hold the edit key for this workspace.' }] };
-      const res = await fetch('/api/tenants/' + encodeURIComponent(tenant.id), {
-        method: 'PUT', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + tenant.token }, body: JSON.stringify(r.profile),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) return { ok: false, errors: (j.error && j.error.fields) || [{ field: '', message: (j.error && j.error.message) || 'Could not save.' }] };
-      tenant.profile = j.profile; set(cacheKey(tenant.id), JSON.stringify(j.profile)); tenant.applyTheme();
+      if (tenant.demo) { tenant.profile = r.profile; tenant.applyTheme(); return { ok: true, local: true }; }
+      const res = await DB.api('PUT', '/api/tenant', r.profile);
+      if (!res.ok) return { ok: false, errors: (res.error && res.error.fields) || [{ field: '', message: (res.error && res.error.message) || 'Could not save.' }] };
+      tenant.profile = res.json.profile; tenant.data = res.json.data;
+      set(LAST, JSON.stringify({ id: tenant.id, profile: tenant.profile, user: tenant.user, data: tenant.data }));
+      tenant.applyTheme();
       return { ok: true };
     },
 
+    clearLocal() {
+      try { Object.keys(localStorage).filter((k) => k.startsWith('db.')).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* storage blocked */ }
+    },
+    async signOut() {
+      try { await DB.api('POST', '/api/auth/logout', {}); } catch (e) { /* offline: still clear locally */ }
+      tenant.clearLocal();
+      location.assign('login.html');
+    },
+
     preferredMode() {
-      const stored = get(modeKey(tenant.id));
+      const stored = get('db.mode.' + tenant.id);
       return ['auto', 'light', 'dark'].includes(stored) ? stored : (tenant.profile && tenant.profile.brand.mode) || 'auto';
     },
-    setMode(m) { set(modeKey(tenant.id), m); tenant.applyMode(); },
+    setMode(m) { set('db.mode.' + tenant.id, m); tenant.applyMode(); },
     resolvedMode() {
       const m = tenant.preferredMode();
       return m === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : m;
     },
     applyMode() {
       document.documentElement.setAttribute('data-theme', tenant.resolvedMode());
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta && tenant.theme) meta.setAttribute('content', tenant.theme[tenant.resolvedMode()].vars['--surface']);
       window.dispatchEvent(new Event('db:themechange'));
     },
 
@@ -106,8 +117,15 @@
         if (!link) { link = document.createElement('link'); link.id = 'tenant-font'; link.rel = 'stylesheet'; document.head.appendChild(link); }
         if (link.getAttribute('href') !== href) link.setAttribute('href', href);
       } else if (link) link.remove();
-      let icon = document.querySelector('link[rel="icon"]');
-      if (b.logo) { if (!icon) { icon = document.createElement('link'); icon.rel = 'icon'; document.head.appendChild(icon); } icon.setAttribute('href', b.logo); icon.removeAttribute('type'); }
+      const headLink = (rel, id) => { let l = document.getElementById(id); if (!l) { l = document.createElement('link'); l.id = id; l.rel = rel; document.head.appendChild(l); } return l; };
+      if (b.logo) { const i = headLink('icon', 'tenant-icon'); i.setAttribute('href', b.logo); i.removeAttribute('type'); document.querySelectorAll('link[rel="icon"]:not(#tenant-icon)').forEach((x) => x.remove()); }
+      // installable app: this customer's name, colours and icon, not ours
+      if (tenant.id && tenant.id !== 'demo') {
+        headLink('manifest', 'tenant-manifest').setAttribute('href', '/api/public/manifest/' + encodeURIComponent(tenant.id));
+        if (b.icon192) headLink('apple-touch-icon', 'tenant-touch').setAttribute('href', '/api/public/icon/' + encodeURIComponent(tenant.id) + '/192.png');
+      }
+      let meta = document.querySelector('meta[name="theme-color"]');
+      if (!meta) { meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.appendChild(meta); }
       tenant.applyMode();
     },
     displayName() { const b = tenant.profile.brand, c = tenant.profile.company; return b.appName || c.name; },

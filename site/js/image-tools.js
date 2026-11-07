@@ -78,5 +78,32 @@
     throw new Error('That logo is too detailed to store. Try a simpler file.');
   }
 
-  DB.img = { loadImage, toCanvas, analyse, encode };
+  /**
+   * Square 192 and 512 px icons for "install as an app". A logo sits centred on white (safe for any logo colour);
+   * with no logo, the initials sit on the brand colour. Returns null if the result would be too big to store.
+   */
+  async function makeIcons(logoDataUrl, name, fillHex, onHex) {
+    const out = {};
+    const img = logoDataUrl ? await loadImage(logoDataUrl) : null;
+    for (const size of [192, 512]) {
+      const c = document.createElement('canvas'); c.width = c.height = size;
+      const ctx = c.getContext('2d');
+      if (img) {
+        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, size, size);
+        const box = size * 0.68, k = Math.min(box / (img.naturalWidth || 256), box / (img.naturalHeight || 256));
+        const w = (img.naturalWidth || 256) * k, hgt = (img.naturalHeight || 256) * k;
+        ctx.imageSmoothingQuality = 'high'; ctx.drawImage(img, (size - w) / 2, (size - hgt) / 2, w, hgt);
+      } else {
+        ctx.fillStyle = fillHex; ctx.fillRect(0, 0, size, size);
+        ctx.fillStyle = onHex; ctx.font = `700 ${Math.round(size * 0.42)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText((String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?'), size / 2, size / 2 + size * 0.03);
+      }
+      const url = c.toDataURL('image/png');
+      if (url.length * 0.75 > 110 * 1024) return null;
+      out[size] = url;
+    }
+    return { icon192: out[192], icon512: out[512] };
+  }
+
+  DB.img = { loadImage, toCanvas, analyse, encode, makeIcons };
 })();

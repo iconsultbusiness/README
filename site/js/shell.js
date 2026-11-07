@@ -38,17 +38,39 @@
     return items.map((n) => h('a', { href: carry(n.href), 'aria-current': n.id === page ? 'page' : null }, icon(n.icon), n.label));
   }
 
+  let installEvent = null;
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvent = e; const b = document.getElementById('install-btn'); if (b) b.hidden = false; });
+
+  function statusBlock(t, model) {
+    if (model.real) {
+      const d = t.data || {};
+      return h('div', { class: 'status live' }, h('b', { text: 'Your data' }), `${model.locations.length} ${model.locations.length === 1 ? 'location' : 'locations'}, up to ${DB.makeFormat(t.profile).day(model.latest)}.`, d.lastImport ? ` Last import: ${d.lastImport.filename}.` : '');
+    }
+    return h('div', { class: 'status' }, h('b', { text: 'Sample data' }), t.demo ? 'This is a demo workspace. Everything shown is generated.' : 'Nothing imported yet, so everything shown is generated from your profile. ', t.demo ? null : h('a', { href: carry('sources.html'), style: { textDecoration: 'underline' }, text: 'Import your sales' }));
+  }
+  function accountBlock(t) {
+    const out = [];
+    out.push(h('button', { class: 'btn btn-ghost btn-sm', id: 'install-btn', type: 'button', hidden: installEvent ? null : true, style: { margin: '10px 0 0', width: '100%' }, onclick: async () => { if (installEvent) { installEvent.prompt(); await installEvent.userChoice; installEvent = null; document.getElementById('install-btn').hidden = true; } }, text: 'Install as an app' }));
+    if (t.demo) out.push(h('a', { class: 'btn btn-primary btn-sm', href: 'signup.html', style: { margin: '10px 0 0', width: '100%' }, text: 'Create your workspace' }));
+    else out.push(h('div', { class: 'acct' }, h('span', { class: 'who', title: t.user && t.user.email, text: (t.user && t.user.email) || '' }), h('button', { class: 'linkish', type: 'button', onclick: () => t.signOut(), text: 'Sign out' })));
+    return h('div', null, out);
+  }
+
   async function start(pageId) {
     const root = document.getElementById('root');
-    const t = await DB.tenant.load();
-    if (!t) { location.replace('signup.html?next=' + encodeURIComponent(location.pathname.split('/').pop() + location.search)); return; }
+    const t = DB.tenant;
+    const status = await t.load();
+    if (status !== 'ok') { location.replace((status === 'signup' ? 'signup.html' : 'login.html') + '?next=' + encodeURIComponent(location.pathname.split('/').pop() + location.search)); return; }
     const page = DB.pages[pageId];
     const profile = t.profile;
-    const model = DB.data.build(profile, t.id);
+    let model;
+    const makeModel = () => (t.rows ? DB.data.buildReal(t.profile, t.rows) : DB.data.build(t.profile, t.id));
+    try { if (t.data && !t.demo) t.rows = await t.loadRows(); } catch (e) { root.textContent = 'We could not load your data. Check your connection and reload.'; return; }
+    model = makeModel();
     const ctx = { tenant: t, profile, model, f: DB.makeFormat(profile), page: pageId };
     DB.ctx = ctx;
-    // re-run the whole page when branding or specs change (settings saves, targets edited)
-    ctx.refresh = () => { ctx.profile = t.profile; ctx.model = DB.data.build(t.profile, t.id); ctx.f = DB.makeFormat(t.profile); DB.clear(content); render(); updateHeader(); };
+    // re-run the whole page when branding, specs or data change
+    ctx.refresh = () => { ctx.profile = t.profile; ctx.model = makeModel(); ctx.f = DB.makeFormat(t.profile); DB.clear(content); render(); updateHeader(); };
 
     document.title = (page.title || 'App') + ' — ' + DB.tenant.displayName();
     DB.clear(root); root.className = 'app';
@@ -57,8 +79,9 @@
       brandBlock(profile),
       h('nav', { 'aria-label': 'App' }, navLinks(NAV, pageId), h('div', { class: 'label' }, 'Setup'), navLinks(NAV_SETUP, pageId)),
       h('div', { class: 'spacer' }),
-      h('div', { class: 'status' }, h('b', { text: 'Sample data' }), 'Connectors are not live in this preview. Everything shown is generated from your profile.'),
-      profile.brand.showPoweredBy ? h('div', { class: 'powered' }, 'Powered by ', h('a', { href: '/' }, 'dashboards.business')) : null);
+      statusBlock(t, model),
+      profile.brand.showPoweredBy ? h('div', { class: 'powered' }, 'Powered by ', h('a', { href: '/' }, 'dashboards.business')) : null,
+      accountBlock(t));
     const scrim = h('div', { class: 'scrim', onclick: () => side.classList.remove('open') });
     const menuBtn = h('button', { class: 'icon-btn menu-btn', 'aria-label': 'Open menu', 'aria-controls': 'side', onclick: () => { side.classList.add('open'); side.querySelector('a').focus(); } }, icon('menu'));
     const title = h('h1', { text: '' }), sub = h('span', { class: 'sub' });
@@ -74,9 +97,10 @@
     const tabbar = h('nav', { class: 'tabbar', 'aria-label': 'App' }, TABS.map((id) => { const n = NAV.find((x) => x.id === id); return h('a', { href: carry(n.href), 'aria-current': id === pageId ? 'page' : null }, icon(n.icon, 22), n.label.replace('AI analyst', 'Ask')); }));
     const main = h('main', { class: 'main', id: 'main' }, topbar, t.offline ? h('div', { class: 'banner', role: 'status' }, h('span', null, h('b', null, 'You are offline. '), 'Showing the last saved version of your workspace.')) : null,
       t.demo ? h('div', { class: 'banner' }, h('span', null, h('b', null, 'Demo workspace. '), 'This is not a customer account. ', h('a', { href: 'signup.html', style: { textDecoration: 'underline' } }, 'Create yours'), ' to see your own branding and locations here.')) : null, content, tabbar);
-    root.append(side, scrim, main);
+    DB.add(root, side, scrim, main);
     side.addEventListener('keydown', (e) => { if (e.key === 'Escape') side.classList.remove('open'); });
     paintMode();
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('/sw.js').catch(() => {});
 
     function updateHeader() {
       const c = DB.ctx;

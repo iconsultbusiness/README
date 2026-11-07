@@ -146,23 +146,83 @@
     return model;
   }
 
+
+  /**
+   * Model from imported rows ([date, location, revenue, volume|null, efficiency|null]).
+   * Same shape as the sample model so every page works unchanged. The latest day in the data plays the role
+   * of "today", as a finished day. A location with no row on a day is not trading: it is flagged `missing`
+   * and left out of averages and alert rules rather than counted as zero.
+   */
+  function buildReal(profile, rows) {
+    const ind = DBProfile.INDUSTRIES[profile.company.industry];
+    const higherIsBetter = ind.efficiencyDir === 'higher', target = profile.targets;
+    const locs = [...new Set(rows.map((r) => r[1]))];
+    const latest = rows.reduce((a, r) => (r[0] > a ? r[0] : a), '0000-00-00');
+    const latestMs = Date.parse(latest + 'T12:00:00Z');
+    const days = [];
+    for (let i = N_DAYS - 1; i >= 0; i--) { const dt = new Date(latestMs - i * 86400000); days.push({ date: iso(dt), dow: dt.getUTCDay(), isToday: i === 0 }); }
+    const idx = new Map(days.map((d, i) => [d.date, i]));
+    const hasVolume = rows.some((r) => r[3] !== null), hasEff = rows.some((r) => r[4] !== null);
+    const series = locs.map((name) => ({ name, days: days.map((d) => ({ date: d.date, dow: d.dow, isToday: d.isToday, rev: 0, vol: 0, avg: 0, eff: 0, hourly: null, missing: true })) }));
+    const bySeries = new Map(locs.map((l, i) => [l, series[i]]));
+    for (const [date, loc, rev, vol, eff] of rows) {
+      const i = idx.get(date); if (i === undefined) continue;
+      const d = bySeries.get(loc).days[i];
+      d.rev = rev; d.vol = vol === null ? 0 : vol; d.avg = vol ? rev / vol : 0; d.eff = eff === null ? NaN : eff; d.missing = false;
+    }
+    const live = (d) => !d.missing;
+    const totals = days.map((d, di) => {
+      const cells = series.map((s) => s.days[di]).filter(live);
+      const rev = cells.reduce((a, c) => a + c.rev, 0), vol = cells.reduce((a, c) => a + c.vol, 0);
+      const withEff = cells.filter((c) => Number.isFinite(c.eff));
+      const eff = !withEff.length ? NaN : higherIsBetter ? withEff.reduce((a, c) => a + c.eff, 0) / withEff.length : withEff.reduce((a, c) => a + c.eff * c.rev, 0) / Math.max(withEff.reduce((a, c) => a + c.rev, 0), 1e-9);
+      return { date: d.date, dow: d.dow, isToday: d.isToday, rev, vol, avg: vol ? rev / vol : 0, eff: Number.isFinite(eff) ? eff : 0, has: cells.length > 0 };
+    });
+    const ti = N_DAYS - 1, li7 = N_DAYS - 8;
+    const perLocation = series.map((s) => {
+      const t = s.days[ti], lw = s.days[li7];
+      const eff = Number.isFinite(t.eff) && !t.missing ? t.eff : null, effLw = Number.isFinite(lw.eff) && !lw.missing ? lw.eff : null;
+      const bad = eff !== null && (higherIsBetter ? eff < target.efficiency : eff > target.efficiency);
+      return { name: s.name, rev: t.rev, revLw: lw.rev, vol: t.vol, volLw: lw.vol, eff: eff === null ? 0 : eff, effLw: effLw === null ? 0 : effLw, bad, labour: 0, missing: t.missing };
+    });
+    const sum = (k) => perLocation.reduce((a, p) => a + p[k], 0);
+    const revSoFar = sum('rev'), revLw = sum('revLw'), volSoFar = sum('vol'), volLw = sum('volLw');
+    const tl = totals[ti], tw = totals[li7];
+    const model = {
+      real: true, latest, profile, ind, locations: locs, days, series, totals, higherIsBetter, demoClock: false, hasVolume, hasEff,
+      nowHour: 0, minute: 0, hours: HOURS, mix: null,
+      today: {
+        revSoFar, revLw, volSoFar, volLw, effSoFar: tl.eff, effLw: tw.eff,
+        avgSoFar: volSoFar ? revSoFar / volSoFar : 0, avgLw: volLw ? revLw / volLw : 0,
+        hourlyToday: null, hourlyLw: null, hourlyTodayCum: null, perLocation, projected: revSoFar, curveShare: 1,
+      },
+    };
+    model.alerts = buildAlerts(model);
+    return model;
+  }
+
   function buildAlerts(m) {
     const p = m.profile, t = m.today, ind = m.ind, out = [];
     const f = DB.makeFormat(p);
-    const since = m.demoClock ? 'today' : 'since ' + f.hour(Math.max(7, m.nowHour - 2));
-    for (const loc of t.perLocation) {
+    const lastDate = m.days[m.days.length - 1].date;
+    const since = m.real ? 'on ' + f.day(lastDate) : m.demoClock ? 'today' : 'since ' + f.hour(Math.max(7, m.nowHour - 2));
+    if (m.hasEff !== false) for (const loc of t.perLocation) {
       if (loc.bad) {
-        out.push({ id: 'eff-' + loc.name, severity: 'critical', title: `${ind.efficiency} ${m.higherIsBetter ? 'below' : 'over'} target at ${loc.name}`, body: `${f.pct(loc.eff)} against a ${f.pct(p.targets.efficiency, 0)} target, ${since}.`, ago: '2h' });
+        out.push({ id: 'eff-' + loc.name, severity: 'critical', title: `${ind.efficiency} ${m.higherIsBetter ? 'below' : 'over'} target at ${loc.name}`, body: `${f.pct(loc.eff)} against a ${f.pct(p.targets.efficiency, 0)} target, ${since}.`, ago: m.real ? f.monthDay(lastDate) : '2h' });
       }
     }
     const pace = t.projected / p.targets.dailyRevenue;
-    if (pace < 0.95) out.push({ id: 'pace', severity: 'warn', title: 'Revenue is behind pace', body: `On track for ${f.money(t.projected)} today, ${Math.round((1 - pace) * 100)}% under the ${f.money(p.targets.dailyRevenue)} target.`, ago: '1h' });
+    const agoOf = (x) => (m.real ? f.monthDay(lastDate) : x);
+    if (m.real) {
+      if (pace < 0.95) out.push({ id: 'pace', severity: 'warn', title: 'Revenue was below target', body: `${f.money(t.projected)} on ${f.day(lastDate)}, ${Math.round((1 - pace) * 100)}% under the ${f.money(p.targets.dailyRevenue)} target.`, ago: agoOf('') });
+      else if (pace > 1.03) out.push({ id: 'pace', severity: 'ok', title: 'Revenue beat the target', body: `${f.money(t.projected)} on ${f.day(lastDate)} against a ${f.money(p.targets.dailyRevenue)} target.`, ago: agoOf('') });
+    } else if (pace < 0.95) out.push({ id: 'pace', severity: 'warn', title: 'Revenue is behind pace', body: `On track for ${f.money(t.projected)} today, ${Math.round((1 - pace) * 100)}% under the ${f.money(p.targets.dailyRevenue)} target.`, ago: '1h' });
     else if (pace > 1.03) out.push({ id: 'pace', severity: 'ok', title: 'On pace to beat today’s target', body: `Projected ${f.money(t.projected)} against a ${f.money(p.targets.dailyRevenue)} target.`, ago: '1h' });
-    const sameDow = m.totals.slice(0, -1).filter((d) => d.dow === m.days[m.days.length - 1].dow).slice(-8);
-    const best = Math.max(...sameDow.map((d) => d.rev));
-    if (t.projected > best) out.push({ id: 'best', severity: 'ok', title: `Best ${f.weekday(m.days[m.days.length - 1].date)} in ${sameDow.length} weeks`, body: `Projected ${f.money(t.projected)} beats the previous best of ${f.money(best)}.`, ago: '45m' });
+    const sameDow = m.totals.slice(0, -1).filter((d) => d.dow === m.days[m.days.length - 1].dow && d.rev > 0).slice(-8);
+    const best = sameDow.length ? Math.max(...sameDow.map((d) => d.rev)) : Infinity;
+    if (sameDow.length >= 3 && t.projected > best) out.push({ id: 'best', severity: 'ok', title: `Best ${f.weekday(lastDate)} in ${sameDow.length} weeks`, body: `${m.real ? '' : 'Projected '}${f.money(t.projected)} beats the previous best of ${f.money(best)}.`, ago: agoOf('45m') });
     const top = [...t.perLocation].sort((a, b) => b.rev - a.rev)[0];
-    if (L(m) > 1) out.push({ id: 'mix', severity: 'info', title: `${top.name} is carrying today`, body: `${Math.round((top.rev / t.revSoFar) * 100)}% of revenue so far comes from this location.`, ago: '30m' });
+    if (L(m) > 1 && t.revSoFar > 0) out.push({ id: 'mix', severity: 'info', title: `${top.name} ${m.real ? 'carried the day' : 'is carrying today'}`, body: `${Math.round((top.rev / t.revSoFar) * 100)}% of revenue ${m.real ? '' : 'so far '}comes from this location.`, ago: agoOf('30m') });
     return out;
   }
   const L = (m) => m.locations.length;
@@ -185,11 +245,14 @@
   function evalRule(rule, m) {
     const g = METRIC[rule.metric].get, hits = [];
     m.series.forEach((s) => s.days.slice(-29, -1).forEach((d) => {
+      if (d.missing) return;
       const v = g(d);
+      if (!Number.isFinite(v)) return;
       if (rule.op === '>' ? v > rule.value : v < rule.value) hits.push({ date: d.date, location: s.name, value: v });
     }));
     hits.sort((a, b) => (a.date < b.date ? 1 : -1));
-    return { count: hits.length, last: hits[0] || null, cells: m.series.length * 28 };
+    const cells = m.series.reduce((a, s) => a + s.days.slice(-29, -1).filter((d) => !d.missing && Number.isFinite(g(d))).length, 0);
+    return { count: hits.length, last: hits[0] || null, cells };
   }
   function ruleTitle(rule, profile) {
     const ind = DBProfile.INDUSTRIES[profile.company.industry];
@@ -198,5 +261,5 @@
     return `${name} ${rule.op === '>' ? 'above' : 'below'} ${METRIC[rule.metric].fmt(f, rule.value)} at any location`;
   }
 
-  DB.data = { build, METRIC, defaultRules, evalRule, ruleTitle, HOURS, hashStr, rng, DOW };
+  DB.data = { build, buildReal, METRIC, defaultRules, evalRule, ruleTitle, HOURS, hashStr, rng, DOW };
 })();

@@ -34,14 +34,16 @@
     const wrap = h('div', { class: 'panels halves' });
     m.series.forEach((s) => {
       const ds = s.days.slice(-29, -1);
-      const revTotal = ds.reduce((a, d) => a + d.rev, 0);
-      const eff = m.higherIsBetter ? ds.reduce((a, d) => a + d.eff, 0) / ds.length : ds.reduce((a, d) => a + d.eff * d.rev, 0) / revTotal;
-      const bad = m.higherIsBetter ? eff < p.targets.efficiency : eff > p.targets.efficiency;
+      const live = ds.filter((d) => !d.missing), withEff = live.filter((d) => Number.isFinite(d.eff));
+      const revTotal = live.reduce((a, d) => a + d.rev, 0);
+      const effW = withEff.reduce((a, d) => a + d.rev, 0);
+      const eff = !withEff.length ? null : m.higherIsBetter ? withEff.reduce((a, d) => a + d.eff, 0) / withEff.length : withEff.reduce((a, d) => a + d.eff * d.rev, 0) / Math.max(effW, 1e-9);
+      const bad = eff !== null && (m.higherIsBetter ? eff < p.targets.efficiency : eff > p.targets.efficiency);
       const svg = DB.s('svg', { class: 'chart', role: 'img', 'aria-label': `${s.name}: daily revenue over the last 28 days.` });
       wrap.appendChild(h('div', { class: 'panel' },
-        h('header', null, h('h2', { text: s.name }), h('span', { class: 'pill ' + (bad ? 'crit' : 'ok'), text: `${m.ind.efficiency} ${f.pct(eff)}` })),
+        h('header', null, h('h2', { text: s.name }), eff === null ? null : h('span', { class: 'pill ' + (bad ? 'crit' : 'ok'), text: `${m.ind.efficiency} ${f.pct(eff)}` })),
         h('div', { class: 'muted', style: { fontSize: '13px', marginBottom: '6px' }, text: `${f.money(revTotal)} over 28 days · ${f.money(revTotal / 28)} a day` }), svg));
-      DB.charts.line(svg, { height: 130, yWidth: 44, yMax, xLabels: days.map((d) => f.monthDay(d.date)), xEvery: 7, yFmt: (v) => f.compact(v), tipValue: (v) => f.money(v), tipTitle: (i) => f.day(days[i].date), series: [{ name: s.name, color: '--chart-1', values: ds.map((d) => d.rev) }] });
+      DB.charts.line(svg, { height: 130, yWidth: 44, yMax, xLabels: days.map((d) => f.monthDay(d.date)), xEvery: 7, yFmt: (v) => f.compact(v), tipValue: (v) => f.money(v), tipTitle: (i) => f.day(days[i].date), series: [{ name: s.name, color: '--chart-1', values: ds.map((d) => (d.missing ? null : d.rev)) }] });
     });
     return h('div', null, h('p', { class: 'muted', style: { fontSize: '13px', margin: '0 0 12px' }, text: 'Every chart uses the same scale, so heights compare directly. One colour because it is one measure: daily revenue.' }), wrap);
   }
@@ -82,7 +84,7 @@
         DB.clear(bar); TABS.forEach(([id, label]) => bar.appendChild(h('button', { class: 'chip', role: 'tab', 'aria-selected': String(id === tab), style: id === tab ? { background: 'var(--primary-fill)', color: 'var(--on-primary)', borderColor: 'var(--primary-edge)' } : null, onclick: () => go(id), text: label })));
         DB.clear(body); body.appendChild({ overview: overview, locations: locations, weekly: weekly }[tab](c, go));
       };
-      DB.clear(el); el.append(bar, body); paint();
+      DB.clear(el); DB.add(el, bar, body); paint();
       window.addEventListener('hashchange', paint);
     },
   };

@@ -46,7 +46,8 @@
       if (![...tzSelect.options].some((o) => o.value === st.company.timezone)) tzSelect.insertBefore(h('option', { value: st.company.timezone, text: st.company.timezone, selected: true }), tzSelect.firstChild);
       const week = seg('Week starts on', [['mon', 'Monday'], ['sun', 'Sunday']], st.company.weekStart, (v) => { st.company.weekStart = v; });
 
-      const locIn = h('input', { id: 'f-loc', type: 'text', maxlength: 40, placeholder: 'e.g. Downtown', onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); addLoc(); } } });
+      const locked = !!opts.locationsLocked;
+      const locIn = h('input', { id: 'f-loc', type: 'text', maxlength: 40, placeholder: 'e.g. Downtown', disabled: locked ? true : null, onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); addLoc(); } } });
       const locList = h('ul', { class: 'chip-list', 'aria-label': 'Your locations' });
       const addLoc = () => {
         const v = P.cleanText(locIn.value, 40); if (!v) return;
@@ -56,7 +57,7 @@
       };
       const paintLocs = () => {
         DB.clear(locList);
-        st.locations.forEach((l, i) => locList.appendChild(h('li', null, l, h('button', { type: 'button', 'aria-label': 'Remove ' + l, onclick: () => { st.locations.splice(i, 1); paintLocs(); } }, icon('close', 12)))));
+        st.locations.forEach((l, i) => locList.appendChild(h('li', null, l, locked ? null : h('button', { type: 'button', 'aria-label': 'Remove ' + l, onclick: () => { st.locations.splice(i, 1); paintLocs(); } }, icon('close', 12)))));
       };
 
       const effIn = h('input', { id: 'f-eff', type: 'number', min: 1, max: 100, step: 'any', inputmode: 'decimal', value: st.targets.efficiency, oninput: (e) => { touched.targets = true; st.targets.efficiency = e.target.value; } });
@@ -184,7 +185,7 @@
         const f = DB.makeFormat(Object.assign(clone(st), { company: Object.assign(clone(st.company), { locale: st.company.locale || 'en-US' }) }));
         const ind = P.INDUSTRIES[st.company.industry];
         DB.clear(pv);
-        pv.append(
+        DB.add(pv, 
           h('div', { class: 'pv-head' }, h('span', { text: 'Live preview' }), h('span', { text: (st.brand.appName.trim() || st.company.name.trim() || 'Your business') })),
           h('div', { class: 'pv-body' },
             h('div', { class: 'pv-side' }, brandBlock(), h('div', { class: 'pv-nav on', text: 'Today' }), h('div', { class: 'pv-nav', text: 'Dashboards' }), h('div', { class: 'pv-nav', text: 'Alerts' }), h('div', { class: 'pv-nav', text: 'Goals' })),
@@ -209,28 +210,52 @@
       const form = h('form', { novalidate: true, onsubmit: async (e) => {
         e.preventDefault();
         const draft = clone(st); draft.consent = { brandAuthority: consent.checked };
+        const accErrors = [];
+        let account = null;
+        if (opts.needsAccount) {
+          account = { email: accEmail.value.trim(), password: accPw.value };
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(account.email)) accErrors.push({ field: 'email', message: 'Enter a valid email address.' });
+          if (account.password.length < 10) accErrors.push({ field: 'password', message: 'Choose a password of at least 10 characters.' });
+        }
         const r = P.sanitizeProfile(draft, { requireConsent: mode === 'create' });
-        if (!r.ok) return showErrors(r.errors);
+        if (!r.ok || accErrors.length) return showErrors(accErrors.concat(r.errors));
         submit.disabled = true; const label = submit.textContent; submit.textContent = 'Saving…';
-        let res; try { res = await opts.onSubmit(Object.assign(r.profile, { consent: draft.consent })); } catch (err) { res = { ok: false, errors: [{ field: '', message: err.message || 'Something went wrong.' }] }; }
+        let res;
+        try {
+          const theme = T.buildTheme({ primary: st.brand.primary, accent: st.brand.accent, font: st.brand.font, logoLum: st.brand.logoLum });
+          const icons = await DB.img.makeIcons(st.brand.logo, st.brand.appName.trim() || st.company.name, theme.light.vars['--primary-fill'], theme.light.vars['--on-primary']).catch(() => null);
+          r.profile.brand.icon192 = icons ? icons.icon192 : null; r.profile.brand.icon512 = icons ? icons.icon512 : null;
+          res = await opts.onSubmit(Object.assign(r.profile, { consent: draft.consent }), account);
+        } catch (err) { res = { ok: false, errors: [{ field: '', message: err.message || 'Something went wrong.' }] }; }
         submit.disabled = false; submit.textContent = label;
         if (!res.ok) showErrors(res.errors);
       } });
       function showErrors(errors) {
         DB.clear(errBox); errBox.style.display = 'block';
-        errBox.append(h('b', { text: 'Please check these details' }), h('ul', null, errors.map((x) => h('li', { text: x.message }))));
+        DB.add(errBox, h('b', { text: 'Please check these details' }), h('ul', null, errors.map((x) => h('li', { text: x.message }))));
         errBox.focus(); errBox.scrollIntoView({ block: 'center', behavior: 'smooth' });
       }
 
+      /* ---------- account (only when signing up) ---------- */
+      const accEmail = h('input', { id: 'f-email', type: 'email', autocomplete: 'username', inputmode: 'email', placeholder: 'you@yourbusiness.com' });
+      const accPw = h('input', { id: 'f-pw1', type: 'password', autocomplete: 'new-password', maxlength: 200 });
+      const accToggle = h('button', { type: 'button', 'aria-label': 'Show password', text: 'Show', onclick: () => { const show = accPw.type === 'password'; accPw.type = show ? 'text' : 'password'; accToggle.textContent = show ? 'Hide' : 'Show'; } });
+      const accountSet = opts.needsAccount ? h('fieldset', null, h('legend', { text: 'Your account' }),
+        h('div', { class: 'two-col' },
+          h('div', { class: 'field' }, h('label', { for: 'f-email', text: 'Email' }), accEmail),
+          h('div', { class: 'field' }, h('label', { for: 'f-pw1', text: 'Password' }), h('div', { class: 'pw-wrap' }, accPw, accToggle), h('div', { class: 'hint', text: '10 characters or more.' }))),
+        h('div', { class: 'hint', text: 'You will get a one-time recovery code on the next screen. Keep it: it is how you get back in if you forget your password.' })) : h('div', { class: 'hint', style: { marginBottom: '14px' }, text: opts.signedInAs ? 'Signed in as ' + opts.signedInAs + '.' : '' });
+
       /* ---------- assemble ---------- */
-      form.append(
+      DB.add(form, 
         errBox,
+        accountSet,
         h('fieldset', null, h('legend', { text: 'Your business' }),
           field('Business name', nameIn, null, 'f-name'),
           h('div', { class: 'field' }, h('label', { for: 'f-site', text: 'Website (optional)' }), h('div', { class: 'inline' }, siteIn, pullBtn), h('div', { class: 'hint', text: 'We read the public colours and logo your site already publishes. You confirm everything below.' }), foundHost),
           h('div', { class: 'two-col' }, field('Industry', industry, null, 'f-ind'), field('Currency', currency, null, 'f-cur')),
           h('div', { class: 'two-col' }, field('Time zone', tzSelect, null, 'f-tz'), h('div', { class: 'field' }, h('span', { class: 'lab', text: 'Week starts on' }), week)),
-          h('div', { class: 'field' }, h('label', { for: 'f-loc', text: 'Locations' }), h('div', { class: 'inline' }, locIn, h('button', { class: 'btn btn-ghost', type: 'button', onclick: addLoc, text: 'Add' })), locList)),
+          h('div', { class: 'field' }, h('label', { for: 'f-loc', text: 'Locations' }), h('div', { class: 'inline' }, locIn, h('button', { class: 'btn btn-ghost', type: 'button', disabled: locked ? true : null, onclick: addLoc, text: 'Add' })), locked ? h('div', { class: 'hint', text: 'Your locations come from the sales data you imported. Import a new file to change them.' }) : null, locList)),
         h('fieldset', null, h('legend', { text: 'Your targets' }),
           h('div', { class: 'two-col' }, h('div', { class: 'field' }, h('label', { for: 'f-rev', text: 'Daily revenue target, all locations' }), revIn), h('div', { class: 'field' }, effLabel, effIn, effHint))),
         h('fieldset', null, h('legend', { text: 'Your brand' }),
@@ -243,7 +268,7 @@
         mode === 'create' ? h('label', { class: 'check' }, consent, h('span', { text: 'I am allowed to use this business name and logo, and I agree to the terms. (Needed because your branding is applied across your team’s app.)' })) : null,
         h('div', null, submit));
 
-      host.append(h('div', { class: 'setup' }, form, h('aside', { class: 'sticky', 'aria-label': 'Preview of your branded app' }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } }, h('h2', { style: { fontSize: '15px' }, text: 'How your team will see it' }), pvToggle), pv, notesHost)));
+      DB.add(host, h('div', { class: 'setup' }, form, h('aside', { class: 'sticky', 'aria-label': 'Preview of your branded app' }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } }, h('h2', { style: { fontSize: '15px' }, text: 'How your team will see it' }), pvToggle), pv, notesHost)));
       paintLocs(); paintTargetLabels(); paintLogo(); paintAccent(); paintSwatches(); paintPreview();
       return { state: st };
     },

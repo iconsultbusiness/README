@@ -4,6 +4,7 @@ When a customer signs up, their business profile and brand are applied to the da
 
 ## The flow
 
+0. **Account.** The customer signs up with an email and password and is shown a one-time recovery code. Everything below belongs to that account and is invisible to every other account.
 1. **Profile.** The customer enters business name, website, industry, currency, time zone, locations and targets. The server validates it with `site/js/profile.js`, the single schema shared by the browser, the server and the tests.
 2. **Brand discovery (optional).** "Pull my branding" sends the website to `POST /api/brand/extract`. The server reads only what the home page publishes about itself:
    - theme colour, web manifest colours, Windows tile colour
@@ -12,7 +13,8 @@ When a customer signs up, their business profile and brand are applied to the da
 3. **Confirmation.** Nothing is applied silently. The customer sees what was found, picks the logo and colour, and can upload their own instead. The logo's most prominent colour is read in the browser and offered as a suggestion.
 4. **Consent.** Creating a workspace requires ticking that they are allowed to use the name and logo.
 5. **Theme generation.** `site/js/theme.js` turns the brand colour (and optional button colour) into complete light and dark themes.
-6. **Applied everywhere.** Each page loads the profile, injects the generated CSS variables, sets the font, logo, favicon and title, and builds the sample data from the customer's locations, industry, currency and targets.
+6. **Applied everywhere.** Each page loads the profile, injects the generated CSS variables, sets the font, logo, favicon and title, and shows the customer's data: their imported sales if they have imported any, otherwise sample data shaped by their profile.
+7. **Installable.** The browser gets a per-customer manifest (name, colours, icon made from their logo), so "install" puts their brand on the phone's home screen, not ours.
 
 ## What the theme engine guarantees
 
@@ -37,19 +39,25 @@ Evidence: 48 automated tests, including 400 random brand colours; 106 generated 
 | Server-side request forgery through the website field | `server/lib/safe-fetch.js`: http(s) on ports 80/443 only, every redirect hop re-checked, the connection address is validated at connect time (so DNS tricks cannot swap it), private, loopback, link-local and cloud-metadata ranges blocked, size, decompressed size, redirects and time capped, rate limited |
 | CSS injection through brand values | colours are parsed to numbers and re-emitted as `#RRGGBB`; fonts come from an allow-list; no tenant string ever reaches CSS |
 | Script injection through names or logos | text goes through `textContent` only (a test forbids `innerHTML`); logos are re-encoded to PNG in the browser and verified by magic bytes on the server; SVG is never stored or inlined |
-| Cross-tenant edits | each workspace has a random 192-bit edit key, stored hashed, compared in constant time |
+| Stolen or guessed passwords | scrypt hashing with a per-password salt; five wrong tries lock the account for 15 minutes; login, sign-up and recovery are rate limited; unknown emails cost the same time as wrong passwords |
+| Session theft | random 256-bit token in an HttpOnly, SameSite=Lax cookie (Secure and host-bound over HTTPS); only a hash is stored; password change signs out other devices |
+| Cross-site request forgery | writes need a JSON body, SameSite cookies, and an Origin check |
+| One customer reading another's data | every query is scoped to the signed-in account's workspace; no endpoint accepts a workspace id for private data; tests cover it in both directions |
+| Bad or hostile CSV | parsed twice (browser preview, server decision) with the same code; size, row, location and date limits; formulas are never evaluated; values are stored as numbers and text only |
+| Leaving data on a shared computer | sign-out clears the cached profile and rows from the browser |
 | Clickjacking, script injection at large | Content Security Policy with no inline scripts, `frame-ancestors 'none'`, `nosniff` |
 
 ## Not built yet (be clear with customers)
 
-- **Accounts.** There is no login, password, email or single sign-on. The workspace id selects the tenant; the edit key from sign-up is kept in that browser. Anyone with a workspace link can view it. Replace this before real data goes in.
-- **Live data.** Every number is generated sample data. No connector exists.
-- **Real AI.** The analyst answers by rules over the sample data. It is not a language model.
-- **Notifications.** Alert rules are evaluated, but nothing is pushed or emailed.
+- **Live connectors.** CSV import is the only data source. Point of sale, accounting and rostering connectors do not exist.
+- **Email.** No email is sent, so there are no emailed password resets, invitations or alerts. A one-time recovery code is the only recovery path. If someone loses both their password and the code, you must reset them by hand.
+- **Alert delivery.** Rules are evaluated when the app opens. Nothing is pushed or emailed.
+- **Real AI.** The analyst answers by rules over the data. It is not a language model.
+- **Team members.** One login per workspace. Staff cannot have their own accounts yet.
 - **Per-tenant domains** such as `numbers.customer.com`: needs DNS verification, certificates and routing.
-- **Billing, plan limits** (the "Powered by" removal is a setting today, not a paid feature).
-- **Database.** Tenants live in one JSON file. Fine for a single instance; swap for a database before running two.
-- **Legal pages.** The sign-up box says "I agree to the terms" but there are no terms or privacy policy yet.
+- **Billing and plan limits.** "Powered by" removal is a setting today, not a paid feature.
+- **More than one server.** Storage is one SQLite file. Fine for one instance and a few thousand accounts; move to a networked database before running two.
+- **Legal pages.** The sign-up box says "I agree to the terms" but there are no terms or privacy policy yet. Do not launch to the public without them.
 
 ## Is white label OK?
 
