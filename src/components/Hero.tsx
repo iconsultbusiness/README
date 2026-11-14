@@ -49,7 +49,7 @@ export function Hero() {
       {/* plate */}
       <div className="hero-plate pointer-events-none absolute inset-0 opacity-0">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/media/pack-night.jpg" alt="" aria-hidden fetchPriority="high" className="h-full w-full object-cover opacity-[0.28] [filter:saturate(0.7)_contrast(1.1)]" />
+        <img src="/media/pack-night.jpg" alt="" aria-hidden fetchPriority="high" className="h-full w-full object-cover opacity-[0.38] [filter:saturate(0.7)_contrast(1.1)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(10,10,12,0)_0%,rgba(10,10,12,0.6)_60%,#0a0a0c_100%)]" />
         <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-ink to-transparent" />
       </div>

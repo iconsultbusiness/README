@@ -60,7 +60,7 @@ export function Chapters() {
           </div>
         </div>
         <div className="col-span-5 col-start-8 flex flex-col justify-center gap-12">
-          <p className="label">What we do</p>
+          <p className="label">How it works</p>
           {items.map((c) => (
             <div key={c.title} className="ch-beat">
               <div className="flex items-baseline gap-5">
@@ -75,7 +75,7 @@ export function Chapters() {
 
       {/* mobile / tablet */}
       <div className="flex flex-col gap-20 px-[var(--gutter)] py-24 lg:hidden">
-        <p className="label">What we do</p>
+        <p className="label">How it works</p>
         {items.map((c, i) => (
           <article key={c.title} className={`grid gap-6 ${i % 2 ? "md:grid-cols-[1fr_1.2fr]" : "md:grid-cols-[1.2fr_1fr]"}`}>
             <ZoomImage src={c.img} alt="" className={`${i % 2 ? "md:order-2" : ""} aspect-[4/5] w-[86%] ${i % 2 ? "ml-auto" : ""}`} />

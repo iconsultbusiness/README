@@ -1,6 +1,7 @@
 # BIKE CULTURE — design system
 
-A riders' collective. Rideouts, films, a members' app, and the people who live for the road.
+A motorcycle community, not an MC. Weekly sector ride-outs, a members' app, tours and rallies,
+one annual membership. Model and join flow mirror the page the CTA links to.
 Brand idea: **One pride.** The lion is a pride animal; so is the crew.
 
 ## 1. Visual direction
@@ -43,7 +44,8 @@ Scale: `clamp()` driven. Display 1 = `clamp(4rem, 17vw, 22rem)`. Display 2 = `cl
 ## 5. Page structure
 Preloader (emblem etch draws in) → Hero → Manifesto (pinned word reveal) →
 Mask reveal (silhouette clip opens onto film) → Chapters (pinned visual, 4 beats) →
-Films (horizontal) → Numbers → The Code (sticky stack, ink/oxblood/bone) →
+Rides (horizontal strip) → Membership (price, inclusions, 3 steps, counters) →
+The Code (sticky stack, ink/oxblood/bone) →
 Voices (marquee + pull quote) → Closing statement + CTA → Footer.
 
 ## 6. Interaction system

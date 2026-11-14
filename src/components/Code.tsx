@@ -30,7 +30,7 @@ export function Code() {
         <div key={c.n} className={`code-panel sticky top-0 flex h-[100svh] flex-col justify-between px-[var(--gutter)] py-10 ${themes[c.theme]}`} style={{ zIndex: i + 1 }}>
           <div className="flex items-start justify-between">
             <p className="label !text-current opacity-70">The code — {c.n}</p>
-            {i === 0 && <p className="label !text-current opacity-70">Chapter 03</p>}
+            {i === 0 && <p className="label !text-current opacity-70">Chapter 04</p>}
           </div>
           <div className="code-inner">
             <h2 className="display text-[clamp(3.2rem,12vw,13rem)]">

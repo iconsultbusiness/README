@@ -4,8 +4,8 @@ import { gsap, useGSAP, JOIN_URL } from "@/lib/gsap";
 import { Magnetic } from "./Magnetic";
 
 const links = [
-  { label: "Rideouts", href: "#chapters" },
-  { label: "Films", href: "#films" },
+  { label: "Rides", href: "#chapters" },
+  { label: "Membership", href: "#membership" },
   { label: "The Code", href: "#code" },
   { label: "Voices", href: "#voices" },
 ];

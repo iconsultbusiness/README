@@ -18,7 +18,7 @@ npm run build && npm start
 | `src/lib/gsap.ts` | GSAP setup and the **Join** link (campaign URL) |
 | `src/components/*` | One file per chapter of the page |
 | `public/brand/` | Vector logo set traced from the badge (see below) |
-| `public/media/` | Photography plates, replace with real footage (`public/media/README.md`) |
+| `public/media/` | Photography plates at 1600–2000px, replace with real footage (`public/media/README.md`) |
 
 ## Brand vectors
 

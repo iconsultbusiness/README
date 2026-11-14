@@ -6,11 +6,11 @@ export function Footer() {
       <div className="grid gap-10 border-t border-steel pt-10 md:grid-cols-4">
         <div className="md:col-span-2">
           <p className="display-wide text-[1rem] text-bone">Bike<span className="text-signal">·</span>Culture</p>
-          <p className="body mt-3 max-w-[30ch]">A riders&rsquo; collective. One pride, every road.</p>
+          <p className="body mt-3 max-w-[30ch]">A motorcycle community, not an MC. One pride, every road.</p>
         </div>
         <ul className="flex flex-col gap-3 label">
-          <li><a className="ul" href="#chapters">Rideouts</a></li>
-          <li><a className="ul" href="#films">Films</a></li>
+          <li><a className="ul" href="#chapters">Rides</a></li>
+          <li><a className="ul" href="#membership">Membership</a></li>
           <li><a className="ul" href="#code">The Code</a></li>
           <li><a className="ul" href={JOIN_URL} target="_blank" rel="noopener noreferrer">Join</a></li>
         </ul>

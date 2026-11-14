@@ -4,8 +4,8 @@ import { Hero } from "@/components/Hero";
 import { Manifesto } from "@/components/Manifesto";
 import { MaskReveal } from "@/components/MaskReveal";
 import { Chapters } from "@/components/Chapters";
-import { Films } from "@/components/Films";
-import { Numbers } from "@/components/Numbers";
+import { Rides } from "@/components/Rides";
+import { Membership } from "@/components/Membership";
 import { Code } from "@/components/Code";
 import { Voices } from "@/components/Voices";
 import { Closing } from "@/components/Closing";
@@ -21,8 +21,8 @@ export default function Page() {
         <Manifesto />
         <MaskReveal />
         <Chapters />
-        <Films />
-        <Numbers />
+        <Rides />
+        <Membership />
         <Code />
         <Voices />
         <Closing />

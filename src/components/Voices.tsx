@@ -7,7 +7,7 @@ export function Voices() {
   return (
     <section id="voices" className="relative overflow-hidden bg-ink py-28 md:py-40">
       <div className="px-[var(--gutter)]">
-        <p className="label mb-3">Chapter 04 — Voices</p>
+        <p className="label mb-3">Chapter 05 — Voices</p>
         <Lines text="From the pack." as="h2" className="display text-[clamp(2.4rem,6vw,5rem)] text-bone" />
       </div>
 

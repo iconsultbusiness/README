@@ -22,7 +22,7 @@ const instrument = Instrument_Serif({
 export const metadata: Metadata = {
   title: "Bike Culture — One pride. Every road.",
   description:
-    "A riders' collective. Rideouts, films, a members' app, and the people who live for the road.",
+    "A motorcycle community, not an MC. Weekly ride-outs with your local sector, every bike welcome.",
   openGraph: {
     title: "Bike Culture",
     description: "One pride. Every road.",

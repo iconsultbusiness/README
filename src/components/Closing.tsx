@@ -32,7 +32,7 @@ export function Closing() {
         </h2>
         <div className="close-cta mt-10 flex flex-wrap items-center gap-6">
           <Button href={JOIN_URL}>{content.closing.cta}</Button>
-          <p className="body max-w-[30ch] !text-bone/70">Free to join. Rideouts, films and the app, straight to your phone.</p>
+          <p className="body max-w-[30ch] !text-bone/70">One membership, £199.99 a year. Weekly rides, the app, and your hoody in the post on day 14.</p>
         </div>
       </div>
     </section>

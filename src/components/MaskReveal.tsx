@@ -31,7 +31,7 @@ export function MaskReveal() {
         className="masked absolute inset-0 [--m:34] [mask-image:url('/brand/silhouette.svg')] [mask-position:center_46%] [mask-repeat:no-repeat] [mask-size:calc(var(--m)*1%)_auto] [-webkit-mask-image:url('/brand/silhouette.svg')] [-webkit-mask-position:center_46%] [-webkit-mask-repeat:no-repeat] [-webkit-mask-size:calc(var(--m)*1%)_auto]"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/media/wheelie-dusk.jpg" alt="Rider lifting the front wheel on an empty dual carriageway at dusk" className="h-full w-full object-cover will-change-transform" loading="lazy" />
+        <img src="/media/rally.jpg" alt="Riders on an empty road at dusk" className="h-full w-full object-cover will-change-transform" loading="lazy" />
       </div>
       <div className="cap-a pointer-events-none absolute inset-x-0 bottom-[12%] hidden justify-between px-[var(--gutter)] md:flex">
         <span className="label">Keep scrolling</span>
