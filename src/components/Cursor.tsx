@@ -56,8 +56,8 @@ export function Cursor() {
 
   return (
     <>
-      <div ref={dot} className="pointer-events-none fixed left-0 top-0 z-[90] h-1.5 w-1.5 rounded-full bg-bone mix-blend-difference" />
-      <div ref={ring} className="pointer-events-none fixed left-0 top-0 z-[90] flex h-9 w-9 items-center justify-center rounded-full border border-bone/60">
+      <div ref={dot} className="pointer-events-none fixed left-0 top-0 z-[90] h-1.5 w-1.5 rounded-full bg-bone opacity-0 mix-blend-difference" />
+      <div ref={ring} className="pointer-events-none fixed left-0 top-0 z-[90] flex h-9 w-9 items-center justify-center rounded-full border border-bone/60 opacity-0">
         <span ref={label} className="label !text-[2.6px] !tracking-[0.18em] text-bone opacity-0">View</span>
       </div>
     </>
