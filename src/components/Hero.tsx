@@ -10,7 +10,11 @@ export function Hero() {
   useGSAP(() => {
     const q = gsap.utils.selector(root);
     const reduced = prefersReducedMotion();
-    const intro = gsap.timeline({ delay: reduced ? 0 : 0.2 });
+    if (reduced) {
+      gsap.set(q(".hero-plate"), { opacity: 1 });
+      gsap.set(q(".hero-emblem"), { clipPath: "none" });
+    }
+    const intro = gsap.timeline({ delay: 0.2 });
     if (!reduced) {
       intro
         .fromTo(q(".hero-plate"), { scale: 1.2, opacity: 0 }, { scale: 1, opacity: 1, duration: 2.4, ease: "power2.out" }, 0)

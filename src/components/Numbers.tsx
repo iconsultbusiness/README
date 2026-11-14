@@ -15,6 +15,7 @@ export function Numbers() {
       const o = { v: 0 };
       gsap.to(o, { v: target, duration: 2.2, ease: "power3.out", onUpdate: () => (el.textContent = fmt(Math.round(o.v))), scrollTrigger: { trigger: el, start: "top 85%", once: true } });
     });
+    if (prefersReducedMotion()) return;
     gsap.from(root.current!.querySelectorAll(".num-row"), { opacity: 0, y: 30, stagger: 0.12, duration: 1.2, scrollTrigger: { trigger: root.current, start: "top 75%", once: true } });
   }, { scope: root });
 
